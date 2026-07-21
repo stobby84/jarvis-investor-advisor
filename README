@@ -1,1 +1,66 @@
-Main project of my first AI agent
+# Jarvis Investor Advisor
+
+This project now includes a simple local Python chat interface for talking to an Azure AI agent.
+
+## What you need
+
+- Python 3.10+
+- An Azure AI Foundry project endpoint
+- An Azure agent name that already exists in your project
+- Azure authentication available through Azure CLI or your developer identity
+
+## Setup
+
+1. Install dependencies:
+   ```bash
+   python -m pip install -r requirements.txt
+   ```
+
+2. Copy the example environment file and fill in your values:
+   ```bash
+   copy .env.example .env
+   ```
+
+3. Edit .env and set:
+   - AZURE_AI_PROJECT_ENDPOINT
+   - AZURE_AI_AGENT_NAME
+   - Optional: AZURE_AI_MODEL
+
+## Run locally
+
+```bash
+python app.py
+```
+
+You will be prompted to enter messages. Type exit or quit to end the session.
+
+## Notes
+
+The app uses DefaultAzureCredential first, but if Azure CLI is not available it will fall back to a device-code sign-in in the terminal.
+If you prefer the browser-based flow, set:
+
+```env
+AZURE_AUTH_MODE=interactive
+```
+
+If you want to use an API key stored in Azure Key Vault, set:
+
+```env
+AZURE_AUTH_MODE=apikey
+AZURE_KEY_VAULT_URL=https://your-vault.vault.azure.net/
+AZURE_API_KEY_SECRET_NAME=your-secret-name
+```
+
+If you are already using a service principal, you can also set:
+
+```env
+AZURE_TENANT_ID=...
+AZURE_CLIENT_ID=...
+AZURE_CLIENT_SECRET=...
+```
+
+## Verification
+
+```bash
+python -m unittest discover -s tests -v
+```
