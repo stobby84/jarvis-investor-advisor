@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from azure.ai.projects import AIProjectClient
-from azure.identity import DefaultAzureCredential
+from azure.identity import ClientSecretCredential, DefaultAzureCredential
 from dotenv import load_dotenv
 
 try:
@@ -20,6 +20,9 @@ class AgentSettings:
     project_endpoint: str
     agent_name: str
     model: Optional[str] = None
+    auth_mode: Optional[str] = None
+    key_vault_url: Optional[str] = None
+    api_key_secret_name: Optional[str] = None
 
 
 def load_settings() -> AgentSettings:
@@ -27,6 +30,9 @@ def load_settings() -> AgentSettings:
         project_endpoint=os.getenv("AZURE_AI_PROJECT_ENDPOINT", "").strip(),
         agent_name=os.getenv("AZURE_AI_AGENT_NAME", "").strip(),
         model=os.getenv("AZURE_AI_MODEL", "").strip() or None,
+        auth_mode=os.getenv("AZURE_AUTH_MODE", "").strip() or None,
+        key_vault_url=os.getenv("AZURE_KEY_VAULT_URL", "").strip() or None,
+        api_key_secret_name=os.getenv("AZURE_API_KEY_SECRET_NAME", "").strip() or None,
     )
 
 
@@ -43,26 +49,41 @@ def validate_settings(settings: AgentSettings) -> None:
         )
 
 
-def create_credential():
-    key_vault_url = os.getenv("AZURE_KEY_VAULT_URL", "").strip()
-    secret_name = os.getenv("AZURE_API_KEY_SECRET_NAME", "").strip()
+def create_credential(settings: AgentSettings):
+    auth_mode = (settings.auth_mode or "").strip().lower()
 
-    if not key_vault_url or not secret_name:
-        raise ValueError(
-            "API key mode requires AZURE_KEY_VAULT_URL and AZURE_API_KEY_SECRET_NAME"
-        )
+    if auth_mode == "apikey":
+        if not settings.key_vault_url or not settings.api_key_secret_name:
+            raise ValueError(
+                "API key mode requires AZURE_KEY_VAULT_URL and AZURE_API_KEY_SECRET_NAME"
+            )
 
-    if SecretClient is None:
-        raise RuntimeError("azure-keyvault-secrets package is required for API key mode")
+        if SecretClient is None:
+            raise RuntimeError("azure-keyvault-secrets package is required for API key mode")
 
-    credential = DefaultAzureCredential()
-    client = SecretClient(vault_url=key_vault_url, credential=credential)
-    secret = client.get_secret(secret_name)
-    return secret.value
+        tenant_id = os.getenv("AZURE_TENANT_ID", "").strip()
+        client_id = os.getenv("AZURE_CLIENT_ID", "").strip()
+        client_secret = os.getenv("AZURE_CLIENT_SECRET", "").strip()
+
+        if tenant_id and client_id and client_secret:
+            credential = ClientSecretCredential(tenant_id, client_id, client_secret)
+        else:
+            credential = DefaultAzureCredential()
+
+        client = SecretClient(vault_url=settings.key_vault_url, credential=credential)
+        secret = client.get_secret(settings.api_key_secret_name)
+        if not secret.value:
+            raise RuntimeError("The Azure Key Vault secret is empty")
+        return credential
+
+    if auth_mode == "interactive":
+        return DefaultAzureCredential()
+
+    return DefaultAzureCredential()
 
 
 def create_project_client(settings: AgentSettings) -> AIProjectClient:
-    credential = create_credential()
+    credential = create_credential(settings)
     return AIProjectClient(endpoint=settings.project_endpoint, credential=credential)
 
 
